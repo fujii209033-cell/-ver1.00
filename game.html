@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>チェイスのパウパト・アクション（開発用土台）</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
+        canvas {
+            background-color: #87CEEB; /* 空の色 */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+// ゲームの状態管理
+let score = 0;
+let isCleared = false;
+
+// 1. 主人公（チェイス）のデータ
+const chase = {
+    x: 100,
+    y: 300,
+    width: 40,
+    height: 40,
+    vy: 0,
+    gravity: 0.6,
+    jumpPower: -12,
+    isGrounded: true
+};
+
+// 地面の高さ
+const groundY = 340;
+
+// 2. 障害物（赤い四角）のデータ
+const obstacle = {
+    x: 800,
+    y: 300,
+    width: 30,
+    height: 40,
+    speed: 5
+};
+
+// 3. アイテム（骨クッキー：黄色の丸）のデータ
+const item = {
+    x: 500,
+    y: 220,
+    radius: 15,
+    speed: 5,
+    isCollected: false
+};
+
+// 4. ゴール（パウステーション：本来は右端。今回は簡単のため一定時間で出現）
+const goal = {
+    x: 1500, // 遠くに配置しておいて、だんだん近づいてくる
+    y: 190,
+    width: 80,
+    height: 150,
+    speed: 5
+};
+
+// ジャンプの入力関数
+function doJump() {
+    if (chase.isGrounded && !isCleared) {
+        chase.vy = chase.jumpPower;
+        chase.isGrounded = false;
+    }
+}
+
+// キーボード（スペースキー）と画面タップの両方に対応
+window.addEventListener("keydown", (e) => { if (e.code === "Space") doJump(); });
+window.addEventListener("touchstart", doJump);
+
+// メインのゲームループ（1秒間に60回実行）
+function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // --- 背景と地面の描画 ---
+    ctx.fillStyle = "#228B22"; // 緑の地面
+    ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+
+    if (!isCleared) {
+        // --- 物理演算（ジャンプと重力） ---
+        chase.vy += chase.gravity;
+        chase.y += chase.vy;
+
+        // 地面に着地したかチェック
+        if (chase.y >= groundY - chase.height) {
+            chase.y = groundY - chase.height;
+            chase.vy = 0;
+            chase.isGrounded = true;
+        }
+
+        // --- オブジェクトの移動（オートランの表現） ---
+        obstacle.x -= obstacle.speed;
+        if (!item.isCollected) item.x -= item.speed;
+        goal.x -= goal.speed;
+
+        // ループ処理（障害物とアイテムが画面外に出たら右から戻す）
+        if (obstacle.x < -obstacle.width) obstacle.x = 900 + Math.random() * 300;
+        if (item.x < -30) {
+            item.x = 800 + Math.random() * 400;
+            item.isCollected = false;
+        }
+
+        // --- 当たり判定 ---
+        // ① 障害物との当たり判定（幼児向け：減速するだけ）
+        if (chase.x < obstacle.x + obstacle.width &&
+            chase.x + chase.width > obstacle.x &&
+            chase.y < obstacle.y + obstacle.height &&
+            chase.y + chase.height > obstacle.y) {
+            // 当たったら一瞬障害物を遠くに飛ばして仕切り直し（ゲームオーバーにはしない）
+            obstacle.x = 900;
+        }
+
+        // ② アイテム（骨クッキー）との当たり判定
+        if (!item.isCollected &&
+            chase.x < item.x + item.radius &&
+            chase.x + chase.width > item.x - item.radius &&
+            chase.y < item.y + item.radius &&
+            chase.y + chase.height > item.y - item.radius) {
+            item.isCollected = true;
+            score += 1;
+        }
+
+        // ③ ゴール（パウステーション）に到達したか
+        if (chase.x > goal.x) {
+            isCleared = true;
+        }
+    }
+
+    // --- 描画処理 ---
+    // ゴール（パウステーション役：大きな紺色の四角）
+    ctx.fillStyle = "#1E3A8A";
+    ctx.fillRect(goal.x, goal.y, goal.width, goal.height);
+
+    // アイテム（骨クッキー役：黄色の円）
+    if (!item.isCollected) {
+        ctx.fillStyle = "#FBBF24";
+        ctx.beginPath();
+        ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // 障害物（赤い四角）
+    ctx.fillStyle = "#EF4444";
+    ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+
+    // 主人公チェイス（ポリスブルーの四角）
+    ctx.fillStyle = "#0000FF";
+    ctx.fillRect(chase.x, chase.y, chase.width, chase.height);
+
+    // スコア表示
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "20px sans-serif";
+    ctx.fillText("ほねクッキー: " + score, 20, 40);
+
+    // --- クリア画面 ---
+    if (isCleared) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#FFFF00";
+        ctx.font = "bold 40px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("パウフェクト！", canvas.width / 2, canvas.height / 2 - 20);
+        
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = "24px sans-serif";
+        ctx.fillText("チェイス「パウ・パック、てんかい！」", canvas.width / 2, canvas.height / 2 + 30);
+    } else {
+        requestAnimationFrame(gameLoop);
+    }
+}
+
+// ゲームスタート
+gameLoop();
+</script>
+
+</body>
+</html>
